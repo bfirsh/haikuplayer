@@ -142,7 +142,7 @@ class TumblrHaikuPoster(object):
                     haiku['entry'].link,
                     int(math.floor(begin / 60)),
                     int(begin % 60),
-                    haiku['entry'].title.encode('utf-8')
+                    haiku['entry'].title.split(':')[0].encode('utf-8')
                 ),
                 'state': 'draft',
             }))
