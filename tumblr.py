@@ -23,7 +23,6 @@ class SubtitleHaikuFinder(HaikuFinder):
     
     def find_haikus(self):
         haikus = []
-        i = 0
         count = len(self.lines)
         for i in xrange(count):
             offset = 0
@@ -51,10 +50,7 @@ class SubtitleHaikuFinder(HaikuFinder):
                         'subtitle': self.lines[i],
                     })
                     break
-                except Nope:
-                    break
-                except TooShort:
-                    #offset += 1
+                except (Nope, TooShort):
                     break
         return haikus
     
@@ -111,7 +107,6 @@ class SubtitleHaikuCrawler(object):
         """
         Returns an etree of the subtitles for a given pid.
         """
-        # Download subtitles for this program
         print 'Downloading subtitles for %s...' % pid
         process = subprocess.Popen(
             ['ruby', 'download_subtitles.rb', pid],
