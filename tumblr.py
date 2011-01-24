@@ -31,6 +31,8 @@ class SubtitleHaikuFinder(HaikuFinder):
                 new_line = self.get_element_text(self.lines[i + offset])
                 if not new_line:
                     break
+                # Remove #s from start and end of lyrics
+                new_line = re.sub(r'(^#\s*)|(\s+#$)', '', new_line)
                 # Only start of sentences
                 if offset == 0 and (new_line[0].upper() != new_line[0]
                                     or re.match(r'[^A-Za-z]', new_line[0])):
