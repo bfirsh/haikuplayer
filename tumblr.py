@@ -12,6 +12,7 @@ import time
 from urllib import urlencode
 import urllib2
 from xml.etree import ElementTree
+import xml.parsers.expat
 
 config = simplejson.load(open('config.json'))
 data_file = 'tumblr-data.json'
@@ -93,9 +94,9 @@ class SubtitleHaikuCrawler(object):
                 pid = entry.id.split(':')[-1]
                 if pid in self.crawled_pids:
                     continue
-                self.crawled_pids.append(pid)
                 etree = self.download_subtitles(pid)
                 if etree is None:
+                    self.crawled_pids.append(pid)
                     continue
                 entry_haikus = SubtitleHaikuFinder(etree[1][0]).find_haikus()
                 for d in entry_haikus:
@@ -118,7 +119,10 @@ class SubtitleHaikuCrawler(object):
         # Skip if there are no subtitles
         if process.wait() != 0:
             return None
-        return ElementTree.fromstring(xml)
+        try:
+            return ElementTree.fromstring(xml)
+        except xml.parsers.expat.ExpatError:
+            return None
 
 
 class TumblrHaikuPoster(object):
@@ -149,6 +153,8 @@ class TumblrHaikuPoster(object):
                 if e.code != 201:
                     print >>sys.stderr, e.fp.read()
                     raise
+            if haiku['pid'] not in self.crawled_pids:
+                self.crawled_pids.append(haiku['pid'])
 
     def timecode_to_seconds(self, tc):
         bits = [float(b) for b in tc.split(':')]
