@@ -12,7 +12,7 @@ import time
 from urllib import urlencode
 import urllib2
 from xml.etree import ElementTree
-import xml.parsers.expat
+from xml.parsers.expat import ExpatError
 
 config = simplejson.load(open('config.json'))
 data_file = 'tumblr-data.json'
@@ -121,7 +121,7 @@ class SubtitleHaikuCrawler(object):
             return None
         try:
             return ElementTree.fromstring(xml)
-        except xml.parsers.expat.ExpatError:
+        except ExpatError:
             return None
 
 
