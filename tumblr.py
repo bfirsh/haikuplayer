@@ -85,7 +85,6 @@ class SubtitleHaikuCrawler(object):
         self.channels = channels or self.all_channels
     
     def find_haikus(self):
-        haikus = []
         for channel in self.channels:
             print 'Getting feed for %s...' % channel
             d = feedparser.parse('http://feeds.bbc.co.uk/iplayer/%s/list' 
@@ -95,16 +94,14 @@ class SubtitleHaikuCrawler(object):
                 if pid in self.crawled_pids:
                     continue
                 etree = self.download_subtitles(pid)
-                if etree is None:
-                    self.crawled_pids.append(pid)
-                    continue
-                entry_haikus = SubtitleHaikuFinder(etree[1][0]).find_haikus()
-                for d in entry_haikus:
-                    d['pid'] = pid
-                    d['entry'] = entry
-                haikus.extend(entry_haikus)
+                if etree is not None:
+                    entry_haikus = SubtitleHaikuFinder(etree[1][0]).find_haikus()
+                    for haiku in entry_haikus:
+                        haiku['pid'] = pid
+                        haiku['entry'] = entry
+                        yield haiku
+                self.crawled_pids.append(pid)
                 time.sleep(1)
-        return haikus
 
     def download_subtitles(self, pid):
         """
@@ -129,32 +126,41 @@ class TumblrHaikuPoster(object):
     def __init__(self, crawled_pids=None):
         self.crawled_pids = crawled_pids or []
 
-    def run(self):
-        crawler = SubtitleHaikuCrawler(self.crawled_pids)
+    def run(self, channels=None):
+        crawler = SubtitleHaikuCrawler(self.crawled_pids, channels=channels)
         for haiku in crawler.find_haikus():
-            print 'Posting haiku from %s...' % haiku['pid']
-            begin = self.timecode_to_seconds(haiku['subtitle'].get('begin'))
-            req = urllib2.Request('http://www.tumblr.com/api/write', urlencode({
-                'email': config['email'],
-                'password': config['password'],
-                'type': 'quote',
-                'quote': '\n'.join(haiku['haiku']).encode('utf-8'),
-                'source': '<a href="%s?t=%sm%ss">%s</a>' % (
-                    haiku['entry'].link,
-                    int(math.floor(begin / 60)),
-                    int(begin % 60),
-                    haiku['entry'].title.split(':')[0].encode('utf-8')
-                ),
-                'state': 'draft',
-            }))
-            try:
-                urllib2.urlopen(req)
-            except urllib2.HTTPError, e:
-                if e.code != 201:
-                    print >>sys.stderr, e.fp.read()
-                    raise
-            if haiku['pid'] not in self.crawled_pids:
-                self.crawled_pids.append(haiku['pid'])
+            self.post_haiku(haiku)
+        self.crawled_pids = crawler.crawled_pids
+
+    def post_haiku(self, haiku):
+        print 'Posting haiku from %s...' % haiku['pid']
+        begin = self.timecode_to_seconds(haiku['subtitle'].get('begin'))
+        req = urllib2.Request('http://www.tumblr.com/api/write', urlencode({
+            'email': config['email'],
+            'password': config['password'],
+            'type': 'quote',
+            'quote': '\n'.join(haiku['haiku']).encode('utf-8'),
+            'source': '<a href="%s?t=%sm%ss">%s</a>' % (
+                haiku['entry'].link,
+                int(math.floor(begin / 60)),
+                int(begin % 60),
+                haiku['entry'].title.split(':')[0].encode('utf-8')
+            ),
+            'state': 'draft',
+        }))
+        try:
+            urllib2.urlopen(req)
+        except urllib2.HTTPError, e:
+            if e.code == 201:
+                # Created!
+                pass
+            elif e.code == 400 and e.msg == 'Slow down buddy':
+                print 'Tumblr is rate limiting, waiting 15 seconds...'
+                time.sleep(15)
+                self.post_haiku(haiku)
+            else:
+                print >>sys.stderr, e.fp.read()
+                raise
 
     def timecode_to_seconds(self, tc):
         bits = [float(b) for b in tc.split(':')]
@@ -166,9 +172,13 @@ def main():
         data = simplejson.load(open(data_file))
     else:
         data = {}
+    if len(sys.argv) > 1:
+        channels = sys.argv[1:]
+    else:
+        channels = None
     poster = TumblrHaikuPoster(data.get('crawled_pids'))
     try:
-        poster.run()
+        poster.run(channels)
     except:
         raise
     finally:
